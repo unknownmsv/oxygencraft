@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Server - O₂Craft</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #01000a; color: #e5e7eb; font-family: 'Inter', sans-serif; }
+        #space-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .glass-panel { background: rgba(15, 10, 25, 0.55); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 1.5rem; }
+        .input-field { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .btn-green { background-color: #22c55e; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+        .btn-red { background-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+        .btn-yellow { background-color: #eab308; box-shadow: 0 0 15px rgba(234, 179, 8, 0.4); }
+        .console { background-color: rgba(0, 0, 0, 0.5); font-family: 'Courier New', Courier, monospace; overflow-y: auto; scroll-behavior: smooth; }
+        .console::-webkit-scrollbar { width: 8px; }
+        .console::-webkit-scrollbar-track { background: transparent; }
+        .console::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        .star { position: absolute; background-color: white; border-radius: 50%; animation: twinkle 4s infinite ease-in-out; }
+        @keyframes twinkle { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body class="antialiased">
+    <canvas id="space-canvas"></canvas>
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="my-8">
+            <a href="index.html" class="text-gray-400 hover:text-white transition-colors">&larr; Back to Dashboard</a>
+            <h1 id="server-name-title" class="text-4xl font-black text-white text-center" style="text-shadow: 0 0 20px rgba(167, 139, 250, 0.7);">Loading Server...</h1>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-8">
+                <div class="glass-panel p-6">
+                    <h2 class="text-2xl font-bold mb-4">Controls</h2>
+                    <div class="flex items-center gap-4">
+                        <p>Status: <span id="server-status" class="px-3 py-1 text-sm rounded-full">Unknown</span></p>
+                        <div class="flex-grow"></div>
+                        <button id="start-server-btn" class="btn-green text-white font-bold py-2 px-4 rounded-lg transition transform hover:scale-105">Start</button>
+                        <button id="stop-server-btn" class="btn-red text-white font-bold py-2 px-4 rounded-lg transition transform hover:scale-105">Stop</button>
+                        <button id="restart-server-btn" class="btn-yellow text-black font-bold py-2 px-4 rounded-lg transition transform hover:scale-105">Restart</button>
+                    </div>
+                </div>
+                <div class="glass-panel p-6 h-96 flex flex-col">
+                    <h2 class="text-2xl font-bold mb-4">Live Console</h2>
+                    <div id="console-output" class="console flex-grow p-4 rounded-lg h-full"></div>
+                </div>
+            </div>
+            <div class="lg:col-span-1 glass-panel p-6">
+                <h2 class="text-2xl font-bold mb-4">Server Properties</h2>
+                <form id="properties-form" class="space-y-4">
+                    <p class="text-gray-400" id="properties-loading">Loading properties...</p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        const WS_BASE_URL = 'ws://localhost:8000';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const serverId = urlParams.get('id');
+
+        const serverNameTitle = document.getElementById('server-name-title');
+        const serverStatus = document.getElementById('server-status');
+        const consoleOutput = document.getElementById('console-output');
+        const propertiesForm = document.getElementById('properties-form');
+        
+        let consoleWs;
+
+        function updateStatusUI(status) {
+            serverStatus.textContent = status;
+            const statusClass = status === 'running' ? 'bg-green-500/50 text-green-300' : 'bg-red-500/50 text-red-300';
+            serverStatus.className = `px-3 py-1 text-sm rounded-full ${statusClass}`;
+        }
+
+        async function fetchServerDetails() {
+            if (!serverId) { serverNameTitle.textContent = "Server Not Found"; return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/servers/${serverId}`);
+                if (!response.ok) throw new Error('Server not found');
+                const server = await response.json();
+                serverNameTitle.textContent = `Managing: ${server.name}`;
+                updateStatusUI(server.status);
+                
+                const propsResponse = await fetch(`${API_BASE_URL}/servers/${serverId}/properties`);
+                const properties = await propsResponse.json();
+                renderProperties(properties);
+            } catch (error) {
+                console.error("Error fetching server details:", error);
+                serverNameTitle.textContent = "Error Loading Server";
+            }
+        }
+        
+        function renderProperties(properties) {
+            propertiesForm.innerHTML = '';
+            if (Object.keys(properties).length === 0) {
+                propertiesForm.innerHTML = '<p class="text-gray-400">No properties file found. Start the server once to generate it.</p>';
+                return;
+            }
+            for (const key in properties) {
+                const value = properties[key];
+                const label = key.replace(/_/g, ' ');
+                let inputHtml = '';
+                if (value === 'true' || value === 'false') {
+                    inputHtml = `<div class="flex items-center justify-between"><label for="prop-${key}" class="text-sm font-medium capitalize">${label}</label><input type="checkbox" id="prop-${key}" data-key="${key}" class="form-checkbox h-5 w-5 rounded bg-gray-700 border-gray-600 text-violet-500 focus:ring-violet-500" ${value === 'true' ? 'checked' : ''}></div>`;
+                } else {
+                     inputHtml = `<div><label for="prop-${key}" class="block mb-1 text-sm font-medium capitalize">${label}</label><input type="${/port|max-players|ram/.test(key) ? 'number' : 'text'}" id="prop-${key}" data-key="${key}" value="${value}" class="input-field w-full p-2 rounded-lg"></div>`;
+                }
+                propertiesForm.innerHTML += inputHtml;
+            }
+            propertiesForm.innerHTML += `<button type="submit" class="w-full bg-violet-600 hover:bg-violet-700 mt-4 py-2 rounded-xl font-bold transition-all">Save Properties</button>`;
+        }
+
+        function connectConsole() {
+            consoleOutput.innerHTML = '<p class="text-gray-500">Connecting to console...</p>';
+            consoleWs = new WebSocket(`${WS_BASE_URL}/ws/servers/${serverId}/console`);
+            consoleWs.onopen = () => { consoleOutput.innerHTML = '<p class="text-green-400">Successfully connected to server console.</p>'; };
+            consoleWs.onmessage = (event) => {
+                if(consoleOutput.querySelector('p')) { consoleOutput.innerHTML = ''; }
+                const logLine = document.createElement('div');
+                logLine.textContent = event.data;
+                consoleOutput.appendChild(logLine);
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            };
+            consoleWs.onclose = () => { consoleOutput.innerHTML += '<p class="text-red-400 mt-2">Console disconnected.</p>'; };
+            consoleWs.onerror = () => { consoleOutput.innerHTML += '<p class="text-red-400 mt-2">Error connecting to console. Is the server running with Gunicorn?</p>'; };
+        }
+
+        document.getElementById('start-server-btn').addEventListener('click', () => {
+            fetch(`${API_BASE_URL}/servers/${serverId}/start`, { method: 'POST' }).then(() => setTimeout(fetchServerDetails, 1000));
+        });
+        document.getElementById('stop-server-btn').addEventListener('click', () => {
+            fetch(`${API_BASE_URL}/servers/${serverId}/stop`, { method: 'POST' }).then(() => setTimeout(fetchServerDetails, 1000));
+        });
+        document.getElementById('restart-server-btn').addEventListener('click', () => {
+            fetch(`${API_BASE_URL}/servers/${serverId}/restart`, { method: 'POST' }).then(() => setTimeout(fetchServerDetails, 1000));
+        });
+        
+        propertiesForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const properties = {};
+            propertiesForm.querySelectorAll('input').forEach(input => {
+                const key = input.dataset.key;
+                if (input.type === 'checkbox') properties[key] = input.checked;
+                else properties[key] = input.value;
+            });
+            try {
+                await fetch(`${API_BASE_URL}/servers/${serverId}/properties`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(properties)
+                });
+                alert('Properties saved! Please restart the server to apply changes.');
+            } catch (error) { alert("Error saving properties."); }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchServerDetails();
+            connectConsole();
+            
+            const spaceCanvas = document.getElementById('space-canvas');
+            const starCount = 150;
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                const size = Math.random() * 2 + 1;
+                star.style.width = `${size}px`; star.style.height = `${size}px`;
+                star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`;
+                star.style.animationDelay = `${Math.random() * 4}s`;
+                star.style.animationDuration = `${Math.random() * 2 + 3}s`;
+                spaceCanvas.appendChild(star);
+            }
+        });
+    </script>
+</body>
+</html>

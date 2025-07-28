@@ -1,0 +1,7 @@
+Flask
+Flask-Cors
+Flask-Sockets
+gunicorn
+gevent
+requests
+beautifulsoup4

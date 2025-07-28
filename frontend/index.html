@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O₂Craft - Cosmic Minecraft Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #01000a; color: #e5e7eb; font-family: 'Inter', sans-serif; }
+        #space-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .glass-panel { background: rgba(15, 10, 25, 0.55); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 1.5rem; }
+        .input-field { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .btn-primary { background-color: #8b5cf6; box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+        .btn-primary:hover { background-color: #7c3aed; }
+        .btn-primary:disabled { background-color: #5b21b6; cursor: not-allowed; opacity: 0.7; }
+        .star { position: absolute; background-color: white; border-radius: 50%; animation: twinkle 4s infinite ease-in-out; }
+        @keyframes twinkle { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        .loader { border-top-color: #a78bfa; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .modal-backdrop { transition: opacity 0.3s ease; }
+        .modal-content { transition: transform 0.3s ease, opacity 0.3s ease; }
+    </style>
+</head>
+<body class="antialiased">
+    <canvas id="space-canvas"></canvas>
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="my-8 text-center">
+            <h1 class="text-5xl font-black text-white" style="text-shadow: 0 0 20px rgba(167, 139, 250, 0.7);">O₂Craft</h1>
+            <p class="text-lg text-gray-300 mt-2">Your Cosmic Minecraft Server Manager</p>
+        </header>
+
+        <div class="glass-panel p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Your Servers</h2>
+                <button id="open-create-modal-btn" class="btn-primary px-4 py-2 rounded-lg font-semibold transform hover:scale-105 transition-transform">+ Create New Server</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="p-4">Name</th><th class="p-4">Version</th><th class="p-4">Type</th><th class="p-4">Status</th><th class="p-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servers-table-body">
+                        <tr><td colspan="5" class="text-center p-8 text-gray-400">Loading servers...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Server Modal -->
+    <div id="create-server-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50 modal-backdrop">
+        <div class="glass-panel p-6 w-full max-w-lg modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Create New Server</h2>
+                <button id="close-create-modal-btn" class="text-3xl text-gray-400 hover:text-white">&times;</button>
+            </div>
+            <form id="create-server-form" class="space-y-4">
+                <div>
+                    <label for="server-name" class="block mb-2 text-sm font-medium">Server Name</label>
+                    <input type="text" id="server-name" class="input-field w-full p-3 rounded-lg" required>
+                </div>
+                <div>
+                    <label for="server-type" class="block mb-2 text-sm font-medium">Server Type</label>
+                    <select id="server-type" class="input-field w-full p-3 rounded-lg" required>
+                        <option value="java">Java Edition</option>
+                        <option value="bedrock">Bedrock Edition</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="server-version" class="block mb-2 text-sm font-medium">Version</label>
+                    <select id="server-version" class="input-field w-full p-3 rounded-lg" required></select>
+                </div>
+                <div>
+                    <label for="server-ram" class="block mb-2 text-sm font-medium">RAM (GB)</label>
+                    <input type="number" id="server-ram" class="input-field w-full p-3 rounded-lg" min="1" max="16" value="4">
+                </div>
+                <button type="submit" id="create-btn" class="w-full btn-primary mt-4 py-3 rounded-xl text-lg font-bold">Create Server</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Creation Status Modal -->
+    <div id="status-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center z-50">
+        <div class="glass-panel p-8 text-center max-w-md w-full">
+            <h3 class="text-2xl font-bold mb-4">Creating Your Server...</h3>
+            <div id="status-loader" class="loader ease-linear rounded-full border-8 border-t-8 border-gray-500 h-24 w-24 mx-auto my-6"></div>
+            <p id="status-message" class="text-lg text-gray-300"></p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        const WS_BASE_URL = 'ws://localhost:8000';
+        let versionsData = {};
+
+        const createModal = document.getElementById('create-server-modal');
+        const openModalBtn = document.getElementById('open-create-modal-btn');
+        const closeModalBtn = document.getElementById('close-create-modal-btn');
+
+        openModalBtn.onclick = () => createModal.classList.remove('hidden');
+        closeModalBtn.onclick = () => createModal.classList.add('hidden');
+
+        async function fetchVersions() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/versions`);
+                versionsData = await response.json();
+                updateVersionDropdown();
+            } catch (error) { console.error('Error loading versions:', error); }
+        }
+
+        function updateVersionDropdown() {
+            const type = document.getElementById('server-type').value;
+            const versionSelect = document.getElementById('server-version');
+            versionSelect.innerHTML = '';
+            const versions = type === 'java' ? versionsData.java : versionsData.bedrock;
+            if (!versions) return;
+            versions.forEach(version => {
+                const option = document.createElement('option');
+                option.value = version.id;
+                option.dataset.url = version.url || '';
+                option.textContent = version.id;
+                versionSelect.appendChild(option);
+            });
+        }
+
+        async function fetchServers() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/servers`);
+                const servers = await response.json();
+                const tableBody = document.getElementById('servers-table-body');
+                tableBody.innerHTML = '';
+                if (servers.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-8 text-gray-400">No servers found. Create one to get started!</td></tr>`;
+                    return;
+                }
+                servers.forEach(server => {
+                    const statusClass = server.status === 'running' ? 'bg-green-500/50 text-green-300' : 'bg-red-500/50 text-red-300';
+                    const row = `
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td class="p-4 font-semibold">${server.name}</td>
+                            <td class="p-4 text-gray-400">${server.version}</td>
+                            <td class="p-4 text-gray-400 capitalize">${server.type}</td>
+                            <td class="p-4"><span class="px-3 py-1 text-sm rounded-full ${statusClass}">${server.status}</span></td>
+                            <td class="p-4"><a href="server.html?id=${server.id}" class="text-violet-400 hover:text-violet-300 font-bold">Manage &rarr;</a></td>
+                        </tr>`;
+                    tableBody.innerHTML += row;
+                });
+            } catch (error) { console.error('Error loading servers:', error); }
+        }
+
+        document.getElementById('create-server-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const createBtn = document.getElementById('create-btn');
+            createBtn.disabled = true;
+            createBtn.textContent = 'Processing...';
+
+            const modal = document.getElementById('status-modal');
+            const statusMessage = document.getElementById('status-message');
+            createModal.classList.add('hidden');
+            modal.classList.remove('hidden');
+            
+            const versionSelect = document.getElementById('server-version');
+            const serverData = {
+                name: document.getElementById('server-name').value,
+                type: document.getElementById('server-type').value,
+                version: versionSelect.value,
+                ram: document.getElementById('server-ram').value,
+                version_url: versionSelect.selectedOptions[0].dataset.url
+            };
+
+            const ws = new WebSocket(`${WS_BASE_URL}/ws/create_status`);
+            ws.onopen = () => ws.send(JSON.stringify(serverData));
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                statusMessage.textContent = data.message;
+                if (data.status === 'complete' || data.status === 'error') {
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                        createBtn.disabled = false;
+                        createBtn.textContent = 'Create Server';
+                        fetchServers();
+                    }, 3000);
+                }
+            };
+            ws.onerror = () => {
+                statusMessage.textContent = 'Connection error. Is the server running with Gunicorn?';
+                 setTimeout(() => {
+                        modal.classList.add('hidden');
+                        createBtn.disabled = false;
+                        createBtn.textContent = 'Create Server';
+                    }, 5000);
+            }
+        });
+        
+        document.getElementById('server-type').addEventListener('change', updateVersionDropdown);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchVersions();
+            fetchServers();
+            setInterval(fetchServers, 10000);
+
+            const spaceCanvas = document.getElementById('space-canvas');
+            const starCount = 150;
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                const size = Math.random() * 2 + 1;
+                star.style.width = `${size}px`; star.style.height = `${size}px`;
+                star.style.top = `${Math.random() * 100}%`; star.style.left = `${Math.random() * 100}%`;
+                star.style.animationDelay = `${Math.random() * 4}s`;
+                star.style.animationDuration = `${Math.random() * 2 + 3}s`;
+                spaceCanvas.appendChild(star);
+            }
+        });
+    </script>
+</body>
+</html>
