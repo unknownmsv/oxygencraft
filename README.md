@@ -106,6 +106,6 @@ Licensed under **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.
 ---
 
 <p align="center">
-  <img src="https://img.shields.io/github/stars/username/o2craft?style=social" alt="Stars">  
-  <img src="https://img.shields.io/github/forks/username/o2craft?style=social" alt="Forks">
+  <img src="https://img.shields.io/github/stars/unknownmsv/oxygencraft?style=social" alt="Stars">  
+  <img src="https://img.shields.io/github/forks/unknownmsv/oxygencraft?style=social" alt="Forks">
 </p>
