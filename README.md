@@ -1,20 +1,111 @@
-O₂Craft - Your Cosmic Minecraft Server Manager<p align="center"><img src="https://placehold.co/600x300/01000a/8b5cf6?text=O%E2%82%82Craft&font=raleway" alt="O2Craft Banner"></p><p align="center"><em>A sleek, modern, and lightweight web interface for creating and managing your Minecraft (Java & Bedrock) servers.</em></p><p align="center"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=for-the-badge&logo=python" alt="Python Version"><img src="https://img.shields.io/badge/Framework-Flask-black.svg?style=for-the-badge&logo=flask" alt="Flask"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="License: MIT"><img src="https://img.shields.io/badge/Status-Active-brightgreen.svg?style=for-the-badge" alt="Project Status"></p>✨ FeaturesO₂Craft provides a stunning "glassmorphism" UI with a cosmic theme to make server management a delight.🌌 Stunning Web UI: A beautiful, responsive interface built with Tailwind CSS.🚀 One-Click Creation: Effortlessly create new Minecraft servers.☕ Java & 🪨 Bedrock Support: Manage both server editions from one place.📊 Live Console: View your server's live console output directly in your browser via WebSockets.⚙️ Server Properties Editor: Easily view and edit your server.properties file.🎮 Core Controls: Simple Start, Stop, and Restart buttons for easy server management.⬇️ Automatic Downloads: Automatically fetches the latest server versions from official sources.🪶 Lightweight: Built with Flask and Gevent for minimal resource usage.🛠️ Tech StackBackend: Python, Flask, Flask-SockWSGI Server: GunicornConcurrency: GeventFrontend: HTML, Tailwind CSS, Vanilla JavaScriptDependencies: Requests, BeautifulSoup4🚀 Getting StartedFollow these instructions to get your own O₂Craft instance up and running.PrerequisitesPython 3.10 or newerJava 17 or newer (for running Minecraft Java Edition servers)git for cloning the repositoryInstallationClone the repository:git clone https://github.com/YOUR_USERNAME/o2craft.git
+# O₂Craft - Your Cosmic Minecraft Server Manager  
+
+<p align="center">  
+  <img src="https://placehold.co/600x300/01000a/8b5cf6?text=O%E2%82%82Craft&font=raleway" alt="O₂Craft Banner">  
+</p>  
+
+<p align="center">  
+  <em>A sleek, modern, and lightweight web interface for creating and managing Minecraft (Java & Bedrock) servers</em>  
+</p>  
+
+<p align="center">  
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=for-the-badge&logo=python" alt="Python">  
+  <img src="https://img.shields.io/badge/Flask-2.0+-black.svg?style=for-the-badge&logo=flask" alt="Flask">  
+  <img src="https://img.shields.io/badge/License-Apache--2.0-green.svg?style=for-the-badge" alt="License">  
+  <img src="https://img.shields.io/badge/Status-Active-brightgreen.svg?style=for-the-badge" alt="Status">  
+</p>  
+
+## ✨ Cosmic Features  
+
+O₂Craft brings a stunning "glassmorphism" UI with cosmic aesthetics to make server management delightful:  
+
+🌌 **Stunning Web UI**: Responsive interface built with Tailwind CSS  
+🚀 **One-Click Creation**: Instant Minecraft server deployment  
+☕ **Java & 🪨 Bedrock**: Dual-edition support in one dashboard  
+📊 **Live Console**: Real-time monitoring via WebSockets  
+⚙️ **Smart Config Editor**: Visual server.properties management  
+🎮 **Core Controls**: Start/Stop/Restart with one click  
+⬇️ **Auto-Updates**: Fetches latest server versions automatically  
+🪶 **Lightweight**: Minimal footprint with Flask & Gevent  
+
+## 🛠️ Tech Stack  
+
+**Backend**: Python 3.10+, Flask, Flask-Sock  
+**WSGI**: Gunicorn with Gevent workers  
+**Frontend**: Tailwind CSS, Vanilla JS, WebSockets  
+**Dependencies**: Requests, BeautifulSoup4  
+
+## 🚀 Quick Start  
+
+### Prerequisites  
+- Python 3.10+  
+- Java 17+ (for Java Edition)  
+- Git  
+
+```bash
+git clone https://github.com/unknownmsv/oxygencraft.git
 cd o2craft
-(Don't forget to replace YOUR_USERNAME with your actual GitHub username!)Create a virtual environment (recommended):python -m venv venv
-source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-Install the required packages:Create a requirements.txt file with the content provided here and then run:pip install -r requirements.txt
-Running the ApplicationYou can run the server in two modes:1. Development Mode (for testing)This uses Flask's built-in development server. It's easy to use but not suitable for a live environment.python app.py
-2. Production Mode (Recommended)This uses Gunicorn with gevent workers, which is the correct way to run the application to handle WebSockets and concurrent users efficiently.gunicorn --worker-class gevent -w 1 --bind 0.0.0.0:8000 app:app
---worker-class gevent: Essential for WebSocket support.-w 1: Runs a single worker process. You can increase this if needed, but for a personal manager, 1 is usually enough.--bind 0.0.0.0:8000: Makes the server accessible on your local network at port 8000.Once running, open your web browser and navigate to http://localhost:8000 or http://YOUR_SERVER_IP:8000.📖 How to UseOpen the Web Interface: Navigate to the application in your browser.Create a Server:Click the + Create New Server button.Fill in the server name, select the type (Java/Bedrock), choose a version, and allocate RAM.Click Create Server. A status modal will show the download and setup progress.Manage a Server:From the dashboard, click Manage → on the server you want to control.On the management page, you can:Start, Stop, or Restart the server.View the Live Console.Edit settings in the Server Properties panel and save them. (Remember to restart the server for property changes to take effect!)📁 Project Structureo2craft/
-├── app.py                  # Main Flask application logic
-├── servers/                # Directory where all server data is stored
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+### 🏃 Running  
+
+**Development Mode**:  
+```bash
+python app.py
+```
+
+**Production Mode**:  
+```bash
+gunicorn --worker-class gevent -w 1 --bind 0.0.0.0:8000 app:app
+```
+
+Access at: `http://localhost:8000`
+
+## 📖 User Guide  
+
+1. **Create Server**:  
+   - Click "+ New Server"  
+   - Select type (Java/Bedrock), version, and RAM  
+   - Watch automatic setup complete  
+
+2. **Manage Servers**:  
+   - Start/Stop/Restart with single clicks  
+   - Live console streaming  
+   - Edit server.properties visually  
+
+## 📂 Project Structure  
+
+```
+o2craft/
+├── app.py                  # Main application
+├── servers/                # Server instances
 │   └── [server_id]/
-│       ├── config.json
-│       ├── server.jar (for Java)
-│       └── ...
-├── frontend/               # All frontend files
-│   ├── index.html          # Main dashboard page
-│   └── server.html         # Server management page
-├── requirements.txt        # Python package dependencies
+│       ├── config.json     # Server configuration
+│       └── server.jar      # Java server binary
+├── static/                 # Frontend assets
+├── templates/              # HTML templates
+├── LICENSE                 # Apache 2.0
 └── README.md               # This file
-🤝 ContributingContributions are welcome! If you have ideas for new features, improvements, or bug fixes, please feel free to:Fork the repository.Create a new branch (git checkout -b feature/your-feature-name).Make your changes.Commit your changes (git commit -m 'Add some feature').Push to the branch (git push origin feature/your-feature-name).Open a Pull Request.📄 LicenseThis project is licensed under the MIT License. See the LICENSE file for details.
+```
+
+## 🤝 Contributing  
+
+We welcome contributions! Please:  
+1. Fork the repository  
+2. Create a feature branch  
+3. Submit a PR  
+
+## 📜 License  
+
+Licensed under **[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)**  
+
+
+
+---
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/username/o2craft?style=social" alt="Stars">  
+  <img src="https://img.shields.io/github/forks/username/o2craft?style=social" alt="Forks">
+</p>
