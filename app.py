@@ -4,19 +4,19 @@ import json
 import subprocess
 import uuid
 import requests
-import gevent
+import gevent # gevent را نگه می‌داریم چون برای خواندن لاگ‌ها استفاده می‌شود
 import time
 import zipfile
 import io
 from flask import Flask, jsonify, request, render_template, abort
 from flask_cors import CORS
-from flask_sockets import Sockets
+from flask_sock import Sock # <<< تغییر ۱: ایمپورت کردن Sock به جای Sockets
 from bs4 import BeautifulSoup
 
 # --- 1. App Setup ---
 app = Flask(__name__, template_folder='frontend', static_folder='frontend')
 CORS(app)
-sockets = Sockets(app)
+sock = Sock(app) # <<< تغییر ۲: مقداردهی اولیه Sock
 
 # --- 2. Configuration & State ---
 SERVERS_DIR = "servers"
@@ -24,7 +24,7 @@ os.makedirs(SERVERS_DIR, exist_ok=True)
 servers_db = {}
 running_processes = {}
 
-# --- 3. Helper Functions ---
+# --- 3. Helper Functions (بدون تغییر) ---
 def get_server_path(server_id): return os.path.join(SERVERS_DIR, server_id)
 
 def save_server_config(server_id, server_data):
@@ -80,7 +80,7 @@ def write_properties(server_id, properties):
         for key, value in current_props.items():
             f.write(f"{key.replace('_', '-')}={value}\n")
 
-# --- 4. Flask Routes ---
+# --- 4. Flask Routes (بدون تغییر) ---
 load_servers_from_disk()
 
 @app.route('/')
@@ -93,14 +93,12 @@ def server_page(): return render_template('server.html')
 def get_versions():
     versions = {"java": [], "bedrock": []}
     try:
-        # Fetch Java versions (more reliable)
         java_manifest = requests.get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json").json()
         versions["java"] = [v for v in java_manifest['versions'] if v['type'] == 'release']
     except Exception as e:
         print(f"Could not fetch Java versions: {e}")
 
     try:
-        # Scrape Bedrock version (less reliable, wrapped in try-except)
         bedrock_page = requests.get("https://www.minecraft.net/en-us/download/server/bedrock")
         soup = BeautifulSoup(bedrock_page.content, 'html.parser')
         download_link = soup.find('a', {'data-platform': 'serverBedrockLinux'})
@@ -191,8 +189,8 @@ def restart_server(server_id):
     return jsonify({"message": "Server restarted"})
 
 # --- 5. WebSocket Routes ---
-@sockets.route('/ws/create_status')
-def create_status_socket(ws):
+@sock.route('/ws/create_status') # <<< تغییر ۳: استفاده از دکوراتور @sock.route
+def create_status_socket(ws): # ws آبجکت WebSocket است
     data = json.loads(ws.receive())
     server_id = str(uuid.uuid4())
     server_dir = get_server_path(server_id)
@@ -238,10 +236,9 @@ def create_status_socket(ws):
         ws.send(json.dumps({"status": "complete", "message": "Server created successfully!"}))
     except Exception as e:
         ws.send(json.dumps({"status": "error", "message": str(e)}))
-    finally:
-        if not ws.closed: ws.close()
+    # finally بلاک حذف شد چون flask-sock به طور خودکار کانکشن را مدیریت می‌کند
 
-@sockets.route('/ws/servers/<server_id>/console')
+@sock.route('/ws/servers/<server_id>/console') # <<< تغییر ۴: استفاده از دکوراتور @sock.route
 def console_socket(ws, server_id):
     if server_id not in running_processes or running_processes[server_id].poll() is not None:
         ws.send("[O₂Craft] Server is not running.")
@@ -250,21 +247,41 @@ def console_socket(ws, server_id):
     process = running_processes[server_id]
     
     def read_logs():
+        """این تابع لاگ‌ها را از پراسس سرور خوانده و به کلاینت ارسال می‌کند."""
         try:
             for line in iter(process.stdout.readline, ''):
-                if not ws.closed:
+                # با flask-sock، باید داخل یک try/except بلاک ارسال کنیم
+                # چون اگر کلاینت قطع شود، ws.send ارور می‌دهد
+                try:
                     ws.send(line.strip())
-                else: break
-        except Exception as e: print(f"Log reading error: {e}")
+                except Exception:
+                    break # خروج از حلقه اگر کلاینت قطع شده باشد
+        except Exception as e:
+            print(f"Log reading error: {e}")
 
     log_thread = gevent.spawn(read_logs)
+    
     try:
-        while not ws.closed: gevent.sleep(1)
-    except Exception as e: print(f"WebSocket Error: {e}")
+        # این حلقه پیام‌های ورودی از کلاینت را مدیریت می‌کند (اگر وجود داشته باشد)
+        # و همچنین کانکشن را باز نگه می‌دارد
+        while True:
+            # receive() منتظر پیام می‌ماند. اگر کانکشن بسته شود، ارور می‌دهد.
+            message = ws.receive()
+            # در این اپلیکیشن، ما انتظار پیامی از کلاینت نداریم،
+            # اما این حلقه برای تشخیص قطعی لازم است.
+            # اگر می‌خواهید دستوراتی از کلاینت به سرور بفرستید، اینجا پردازش کنید.
+            # process.stdin.write(message + '\n')
+            # process.stdin.flush()
+    except Exception as e:
+        print(f"WebSocket for server {server_id} closed: {e}")
     finally:
         log_thread.kill()
-        print(f"WebSocket for server {server_id} closed.")
+
 
 if __name__ == '__main__':
-    print("Run with Gunicorn for WebSocket support: gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 app:app")
+    # در حالت توسعه، app.run کافی است.
+    # برای production، از دستور جدید Gunicorn استفاده کنید.
+    print("For development, this works. For production, run with Gunicorn:")
+    print("gunicorn --worker-class gevent -w 1 app:app")
     app.run(host='0.0.0.0', port=8000, debug=True)
+
